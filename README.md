@@ -35,5 +35,7 @@ Error count: 938844
 
 ### gRPC / Protocol Buffers
 
+```
 Elapsed time: 13.796378958s
 Error count: 0
+```

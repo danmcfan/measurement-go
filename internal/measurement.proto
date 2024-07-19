@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package grpc;
+
+option go_package = "./internal/grpc";
+
+message Measurement {
+  double latitude = 1;
+  double longitude = 2;
+  double altitude = 3;
+  double temperature = 4;
+  double pressure = 5;
+  double humidity = 6;
+  int64 timestamp = 7;
+  string device_id = 8;
+}
+
+service MeasurementService {
+  rpc SendMeasurement(Measurement) returns (MeasurementResponse) {}
+}
+
+message MeasurementResponse {
+  bool success = 1;
+  string message = 2;
+}

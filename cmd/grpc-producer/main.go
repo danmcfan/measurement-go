@@ -19,16 +19,8 @@ const (
 	WorkerCount      = 1000
 )
 
-func worker(jobs <-chan int, errs chan<- error, wg *sync.WaitGroup) {
+func worker(client internal.MeasurementServiceClient, jobs <-chan int, errs chan<- error, wg *sync.WaitGroup) {
 	defer wg.Done()
-
-	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Fatalf("Failed to connect: %v", err)
-	}
-	defer conn.Close()
-
-	client := internal.NewMeasurementServiceClient(conn)
 
 	for range jobs {
 		measurement := &internal.Measurement{
@@ -45,10 +37,12 @@ func worker(jobs <-chan int, errs chan<- error, wg *sync.WaitGroup) {
 		resp, err := client.SendMeasurement(context.Background(), measurement)
 		if err != nil {
 			errs <- err
+			continue
 		}
 
 		if !resp.Success {
 			errs <- fmt.Errorf("server failed to process measurement: %v", resp.Message)
+			continue
 		}
 	}
 }
@@ -56,13 +50,25 @@ func worker(jobs <-chan int, errs chan<- error, wg *sync.WaitGroup) {
 func main() {
 	start := time.Now()
 
+	conn, err := grpc.NewClient(
+		"dns:///consumer-headless.default.svc.cluster.local:50051",
+		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		log.Fatalf("Failed to connect: %s", err)
+	}
+	defer conn.Close()
+
+	client := internal.NewMeasurementServiceClient(conn)
+
 	jobs := make(chan int, MeasurementCount)
 	errs := make(chan error, MeasurementCount)
 	var wg sync.WaitGroup
 
 	for w := 1; w <= WorkerCount; w++ {
 		wg.Add(1)
-		go worker(jobs, errs, &wg)
+		go worker(client, jobs, errs, &wg)
 	}
 
 	for i := 1; i <= MeasurementCount; i++ {
